@@ -1,3 +1,31 @@
+# -*- coding: utf-8 -*-
+#
+#  This file is part of ______.
+#
+#   This Source Code Form is subject to the terms of the Mozilla Public
+#   License, v. 2.0. If a copy of the MPL was not distributed with this
+#   file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+#  Created on 08-Jul-2021
+#
+#  @author: tbowers, bshafransky
+
+"""Analysis of the flexure seen in the DeVeny Spectrograph (LDT)
+
+This file contains the main driver for the analysis.
+Should be run in an environment containing:
+    * AstroPy
+    * CCDPROC
+    * NumPy
+    * Matplotlib
+
+Run from the command line:
+% python flexure_analysis.py
+
+--> Should probably have a mechanism for specifying the data directory...
+
+"""
+
 import csv
 import ccdproc as ccd
 from astropy.table import Table
@@ -11,7 +39,7 @@ def flexure_analysis(args):
 
     for grating in ['DV1','DV2','DV5']:
         gcl = load_images(grating)
-        summary = gcl.summary['obserno','telalt','telaz','rotangle'].pprint()
+        summary = gcl.summary['obserno','telalt','telaz','rotangle']
         table = get_line_positions(gcl)
         table.pprint()
         with open('table_containing_line_positions_DV1.csv','w', newline='') as f:
@@ -29,7 +57,7 @@ def load_images(grating):
     DV1 = '150/5000'
     DV2 = '300/4000'
     DV5 = '500/5500'
-#    gid = '150/5000' if grating == 'DV1' else '500/5500' # do I need to do anything for the other gratings?
+    #gid = '150/5000' if grating == 'DV1' else '500/5500' # do I need to do anything for the other gratings?
     return icl.filter(grating=DV1)
 
 def find_indices(arr,condition):
