@@ -60,8 +60,8 @@ def get_line_positions(icl):
             lines_by_row.append({'row':r,
                                  'lines': find_indices(ccd.data[r] > flat_value, lambda e: e ),
                                  'alt':somefunctionthatcallsto('telalt'),
-                                 'Az':somefunctionthatcalssto('telaz'),
-                                 'rot':somefunctionthatcallsto('rotangle)})
+                                 'Az':somefunctionthatcallsto('telaz'),
+                                 'rot':somefunctionthatcallsto('rotangle')})
             # save lines to cached lines array
             # for each scan: if above flat threshold,
                 # mark center value of line,
@@ -75,6 +75,10 @@ def get_line_positions(icl):
                                     'lines': lines_by_row})
     t = Table(flex_line_positions)
     return t
+
+
+def somefunctionthatcallsto(str):
+    return 0
 
 
 
