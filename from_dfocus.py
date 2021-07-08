@@ -5,6 +5,35 @@ import warnings
 from scipy import optimize
 from scipy import signal
 from scipy import interpolate
+from astropy.io import fits
+
+def dvtrim(filename):
+    """Trim a DeVeny Image
+
+    The IDL code from which this was ported contains a large amount of
+    vistigial code from previous versions of the DeVeny camera, including
+    instances where the CCD was read out using 2 amplifiers and required
+    special treatment in order to balance the two sides of the output image.
+
+    The code below consists of the lines of code that were actually running 
+    using the keywords passed from current version of dfocus.pro, and the
+    pieces of that code that are actually used.
+    """
+
+    # Parameters for DeVeny (2015 Deep-Depletion Device):
+    nxpix = 2048
+    prepix = 50
+    # postpix = 50        # Overscan pixels
+
+    # Read in the file
+    image = fits.getdata(filename)
+
+    # Trim the image (remove top and bottom rows) -- why this particular range?
+    image = image[12:512,:]
+
+    # Trim off the 50 prepixels and the 50 postpixels; RETURN
+    return image[:,prepix:prepix+nxpix]
+
 
 def dextract(spectrum,traces,nspix,swext=2,npixavg=None):
     """Object spectral extraction routine

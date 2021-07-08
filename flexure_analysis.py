@@ -63,9 +63,12 @@ def load_images(grating):
 def find_indices(arr,condition):
     return [i for i, elem in enumerate(arr) if condition(elem.all())]
 
-def get_line_positions(icl):
+def get_line_positions(icl, swext=4, win=11, thresh=100.):
     """
     Inputs: 'icl' = ImageFileCollection of images to work with
+            'swext' = Vestigial extraction parameter
+            'win' = Something about the window to extract
+            'thresh' = ADU threshold, above which look for lines
     """
     # Put everything into a list of dicionaties
     flex_line_positions = []
@@ -73,6 +76,29 @@ def get_line_positions(icl):
     # This will only give the x values of the fits file.
     # For each of the images,
     for ccd, fname in icl.ccds(return_fname=True):
+
+        #====================
+        # Code cut-and-paste from dfocus() -- Get line centers above `thresh`
+        # Parameters for DeVeny (2015 Deep-Depletion Device):
+        nxpix, prepix = (2048, 50)
+        # Trim the image (remove top and bottom rows)
+        spectrum = ccd.data[12:512,prepix:prepix+nxpix]
+        ny, nx = spectrum.shape
+        traces = np.full(nx, ny/2, dtype=float).reshape((1,nx))
+        mspectra = dextract(spectrum, traces, win, swext=swext)
+        # Find the lines:
+        centers, _ = dflines(mspectra, thresh=thresh)
+        nc = len(centers)
+        print(F"In get_line_positions(), number of lines: {nc}")
+        print(f"Line Centers: {[f'{cent:.1f}' for cent in centers]}")
+        #====================
+
+
+        #### Ben: At this point, you will have the line centers for this image,
+        #         and you can then proceed to place those into a table for
+        #         future analysis. 
+
+
         # detrmine flat level of image
         #take a defined set of known flat collums
         max_row0=max(np.transpose(ccd.data)[0])
