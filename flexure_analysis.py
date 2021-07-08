@@ -4,6 +4,7 @@ from astropy.table import Table
 import numpy as np
 import matplotlib.pyplot as plt
 
+from .from_dfocus import *
 
 def flexure_analysis(args):
     # Driving routiune for the analysis
