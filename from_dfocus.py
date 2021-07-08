@@ -1,112 +1,58 @@
+# -*- coding: utf-8 -*-
+#
+#  This file is part of ______.
+#
+#   This Source Code Form is subject to the terms of the Mozilla Public
+#   License, v. 2.0. If a copy of the MPL was not distributed with this
+#   file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+#  Created on 08-Jul-2021
+#
+#  @author: tbowers, bshafransky
 
+"""Selected (trimmed) routines from `dfocus`
+
+These are from the pydeveny.dfocus() code, pruned for the immediate use case.
+"""
 
 import numpy as np
 import warnings
 from scipy import optimize
 from scipy import signal
-from scipy import interpolate
-from astropy.io import fits
-
-def dvtrim(filename):
-    """Trim a DeVeny Image
-
-    The IDL code from which this was ported contains a large amount of
-    vistigial code from previous versions of the DeVeny camera, including
-    instances where the CCD was read out using 2 amplifiers and required
-    special treatment in order to balance the two sides of the output image.
-
-    The code below consists of the lines of code that were actually running 
-    using the keywords passed from current version of dfocus.pro, and the
-    pieces of that code that are actually used.
-    """
-
-    # Parameters for DeVeny (2015 Deep-Depletion Device):
-    nxpix = 2048
-    prepix = 50
-    # postpix = 50        # Overscan pixels
-
-    # Read in the file
-    image = fits.getdata(filename)
-
-    # Trim the image (remove top and bottom rows) -- why this particular range?
-    image = image[12:512,:]
-
-    # Trim off the 50 prepixels and the 50 postpixels; RETURN
-    return image[:,prepix:prepix+nxpix]
 
 
-def dextract(spectrum,traces,nspix,swext=2,npixavg=None):
+def dextract(spectrum,traces,nspix,swext=4,npixavg=None):
     """Object spectral extraction routine
    
     Options:
-    swext = 1: extract point source spectra by averaging over window
-    swext = 2: extract full spatial orders with spatial interpolation
-    swext = 3: extract full orders without interpolation 
+    ==x= swext = 1: extract point source spectra by averaging over window
+    ==x= swext = 2: extract full spatial orders with spatial interpolation
+    ==x= swext = 3: extract full orders without interpolation 
     swext = 4: extract spectra by averaging over window
 
     Output:
     spectra: 2 or 3-d array of spectra of individual orders
     """
     
-    # Case out the dimensionality of traces... 0 -> return
+    # Set # orders, size of each order based on traces dimensionality; 0 -> return
     if traces.ndim == 0:
-        return 0
-    elif traces.ndim == 1:
-        nx = traces.size
-        norders = 1
-    else:
-        norders, nx = traces.shape
+        return 0                
+    norders, nx = (1, traces.size) if traces.ndim == 1 else traces.shape
 
     # Case out the option swext
-    if swext == 0:
-        return 0
-
-    elif swext == 1:
-        if npixavg is None:
-            npixavg = 19
-        spectra = np.empty((norders,nx), dtype=float)
-        for io in range(norders):
-            spectra[io,:] = dspecfit(spectrum, traces[io,:], bwidth=nspix, 
-                                     extwidth=npixavg)
-    
-    elif swext == 2:
-        spectra = np.empty((nspix, nx, norders), dtype=float)
-        fnspix = np.arange(nspix, dtype=float) - nspix/2
-        for io in range(norders):
-            for ix in range(nx):
-                # Interpolation:
-                xt = traces[io,ix].astype(int) + fnspix
-                ut = traces[io, ix] + fnspix
-                vector = spectrum[xt, ix]
-                ##IDL: return = INTERPOL(V, X, XOUT)
-                #tvector = interpol(vector, xt, ut)
-                f = interpolate.interp1d(xt, vector, bounds_error=False)
-                tvector = f(ut)
-                spectra[:,ix,io] = tvector
-
-    elif swext == 3:
-        spectra = np.empty((nspix, nx, norders), dtype=float)
-        inspix = np.arange(nspix, dtype=int) - nspix/2
-        for io in range(norders):
-            for ix in range(ix):
-                # W/O Interpolation:
-                xt = traces[io,ix].astype(int) + inspix
-                spectra[:,ix,io] = spectrum[xt, ix]
-
-    elif swext == 4:
+    if swext == 4:
         if npixavg is None:
             npixavg = nspix
         spectra = np.empty((norders, nx), dtype=float)
 
+        # Get the averaged spectra
         for io in range(norders):
             spectra[io,:] = specavg(spectrum, traces[io,:], npixavg)
+
+        return spectra
     
-    else:
-        print("Silly user, you can't do that.")
-        return 0
-
-    return spectra
-
+    print("Silly user, you can't do that.")
+    return 0
 
 
 def gaussfit_func(x, a0, a1, a2, a3):
@@ -117,7 +63,8 @@ def gaussfit_func(x, a0, a1, a2, a3):
     y = a0 * np.exp(-z**2 / a2) + a3
     return y
 
-def dflines(image, thresh=20., mark=False, title=''):
+
+def dflines(image, thresh=20.):
     """Automatically find and centroid lines in a 1-row image
  
     :image:
@@ -129,7 +76,7 @@ def dflines(image, thresh=20., mark=False, title=''):
     :centers: List of line centers (pixel #)
     :fwhm: The computed FWHM
     """
-
+    # Silence OptimizeWarning, this function only
     warnings.simplefilter('ignore', optimize.OptimizeWarning)
 
     nx, ny = image.shape
@@ -137,6 +84,7 @@ def dflines(image, thresh=20., mark=False, title=''):
 
     print(f"Shapes of image: {image.shape}, and avgj: {avgj.shape}")
 
+    # Create empty lists to fill
     peaks = []
     fwhm = []
  
@@ -149,71 +97,58 @@ def dflines(image, thresh=20., mark=False, title=''):
     fwin = 15
     fhalfmax = int(np.floor(fmax/2))
     fhalfwin = int(np.floor(fwin/2))
-    findmax = 50
+    findmax = 50  # Maximum # of lines to find
     j0 = 0
 
-    if mark:
-        centers = [0]
-    else:
-        for j in range(ny):
-            # print(f"avgj[j]: {avgj[j]}, {avgj[j].shape}")
-            if j > (ny - fmax):
-                continue
-            if avgj[j] > (bkgd + thresh):
-                j1 = j
-                if np.abs(j1 - j0) < fmax:      
-                    continue
-                for jf in range(findmax):
-                    itmp0 = avgj[jf + j]
-                    itmp1 = avgj[jf + j + 1]
-                    if itmp1 < itmp0:
-                        icntr = jf + j
-                        break
-                if (icntr < fmax/2) or (icntr > (ny - fmax/2 - 1)):
-                    continue
-                xx = np.arange(fwin, dtype=float) + float(icntr - fhalfwin)
-                temp = avgj[(icntr) - fhalfwin : (icntr) + fhalfwin + 1]
-                temp = signal.medfilt(temp, kernel_size=3)
-                
-                # Run the fit, with error checking
-                try:
-                    p0 = [1000, np.mean(xx), 3, bkgd]
-                    aa, cv = optimize.curve_fit(gaussfit_func, xx, temp, p0=p0)
-                except RuntimeError:
-                    continue  # Just skip this one
-                # print(f"Gaussfit parameters: {aa}")
-                tempfit = gaussfit_func(xx, *aa)
-                center = aa[1]
-                fw = aa[2] * 1.177 * 2.
-                pmax = aa[0]
-                if fw > 1.0:
-                    peaks.append(center)
-                    fwhm.append(fw)
-                j0 = jf + j
+    # Loop through lines
+    for j in range(ny):
+        
+        if j > (ny - fmax):
+            continue
 
-        centers = np.asarray(peaks)
-        #fwhm = fwhm[1:]
+        if avgj[j] > (bkgd + thresh):
+            j1 = j
+            if np.abs(j1 - j0) < fmax:      
+                continue
+
+            for jf in range(findmax):
+                itmp0 = avgj[jf + j]
+                itmp1 = avgj[jf + j + 1]
+                if itmp1 < itmp0:
+                    icntr = jf + j
+                    break
+
+            if (icntr < fmax/2) or (icntr > (ny - fmax/2 - 1)):
+                continue
+
+            xx = np.arange(fwin, dtype=float) + float(icntr - fhalfwin)
+            temp = avgj[(icntr) - fhalfwin : (icntr) + fhalfwin + 1]
+            temp = signal.medfilt(temp, kernel_size=3)
+            
+            # Run the fit, with error checking
+            try:
+                p0 = [1000, np.mean(xx), 3, bkgd]
+                aa, cv = optimize.curve_fit(gaussfit_func, xx, temp, p0=p0)
+            except RuntimeError:
+                continue  # Just skip this one
+
+            _ = gaussfit_func(xx, *aa)
+            center = aa[1]
+            fw = aa[2] * 2.355   # sigma -> FWHM
+            if fw > 1.0:
+                peaks.append(center)
+                fwhm.append(fw)
+            j0 = jf + j
+
+    centers = np.asarray(peaks)
     
     cc = np.where(np.logical_and(centers >=0, centers <=2100))
     centers = centers[cc]
 
-    szc = len(centers)
-    print(f" Number of lines: {szc}")
-
-    print(f"At this point the code makes some plots.  Yippee.")
- 
-    """ 
-    plot,avgj,xra=[0,ny+2],xsty=1,yra=[0,max(avgj)+0.2*max(avgj)], $
-    title=title, xtitle='CCD column', ytitle='I (DN)'
-    for id=0,szc(1)-1 do begin
-        plots,centers(id),avgj(centers(id))+20,psym=1
-        xyouts,centers(id),avgj(centers(id))+30,strtrim(centers(id),2), $
-        /data,orientation=0.
-    endfor
-
-    """
+    print(f" Number of lines: {len(centers)}")
  
     return (centers, fwhm)
+
 
 def specavg(spectrum, trace, wsize):
     """Extract an average spectrum along trace of size wsize
@@ -239,44 +174,4 @@ def specavg(spectrum, trace, wsize):
         speca[i] = np.average(spectrum[int(trace[i]) - whalfsize : 
                                        int(trace[i]) + whalfsize + 1, i])
     
-    #print(f"The shape of speca: {speca.shape}")
     return speca.reshape((1,nx))
-
-
-def dspecfit(spec, trace, bwidth=101, extwidth=19):
-    """Fit the background to a spectrum and subtract it
-
-    Default values:
-    :bwidth: 101
-    :extwidth: 19
-    """
-
-    """     
-    tval=fix(trace)
-
-    nfit=bwidth & win=[bwidth/2-extwidth/2,bwidth/2+extwidth/2] ;  w=0 over win
-    sz=size(spec)
-    fits=fltarr(nfit,sz(1)) & datas=fits & subs=fits
-
-    for i=0,sz(1)-1 do begin
-
-        ww=fltarr(nfit) & ww(*)=1. & ww(win(0):win(1))=0.
-        data=spec(i,tval(i)-nfit/2:tval(i)+nfit/2)
-        coef=polyfitw(findgen(nfit),data,ww,1)	; go with linear fit
-
-        fit=poly(findgen(nfit),coef)
-        fits(*,i)=fit
-        datas(*,i)=data
-        subs(*,i)=data-fit
-
-    endfor
-
-    gplott=fltarr(sz(1))
-
-    for i=0,sz(1)-1 do gplott(i)=total(subs(win(0):win(1),i))
-
-    return,gplott
-
-    end
-    """
-    return 0

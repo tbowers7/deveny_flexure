@@ -66,6 +66,9 @@ def find_indices(arr,condition):
 def get_line_positions(icl, swext=4, win=11, thresh=100.):
     """
     Inputs: 'icl' = ImageFileCollection of images to work with
+
+            These inputs are for the `dfocus`-derived code, and may be left
+            at their default values.
             'swext' = Vestigial extraction parameter
             'win' = Something about the window to extract
             'thresh' = ADU threshold, above which look for lines
@@ -80,14 +83,14 @@ def get_line_positions(icl, swext=4, win=11, thresh=100.):
         #====================
         # Code cut-and-paste from dfocus() -- Get line centers above `thresh`
         # Parameters for DeVeny (2015 Deep-Depletion Device):
-        nxpix, prepix = (2048, 50)
-        # Trim the image (remove top and bottom rows)
-        spectrum = ccd.data[12:512,prepix:prepix+nxpix]
-        ny, nx = spectrum.shape
-        traces = np.full(nx, ny/2, dtype=float).reshape((1,nx))
-        mspectra = dextract(spectrum, traces, win, swext=swext)
+        n_spec_pix, prepix = (2048, 50)
+        # Trim the image (remove top and bottom rows, pre- and post-scan pixels)
+        spec2d = ccd.data[12:512,prepix:prepix+n_spec_pix]
+        ny, nx = spec2d.shape
+        trace = np.full(nx, ny/2, dtype=float).reshape((1,nx)) # Right down the middle
+        spec1d = dextract(spec2d, trace, win, swext=swext)
         # Find the lines:
-        centers, _ = dflines(mspectra, thresh=thresh)
+        centers, _ = dflines(spec1d, thresh=thresh)
         nc = len(centers)
         print(F"In get_line_positions(), number of lines: {nc}")
         print(f"Line Centers: {[f'{cent:.1f}' for cent in centers]}")
