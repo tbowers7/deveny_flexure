@@ -32,7 +32,9 @@ from astropy.table import Table
 import numpy as np
 import matplotlib.pyplot as plt
 
+# Get local routines
 from .from_dfocus import *
+
 
 def flexure_analysis(args):
     # Driving routiune for the analysis
@@ -60,8 +62,10 @@ def load_images(grating):
     #gid = '150/5000' if grating == 'DV1' else '500/5500' # do I need to do anything for the other gratings?
     return icl.filter(grating=DV1)
 
+
 def find_indices(arr,condition):
     return [i for i, elem in enumerate(arr) if condition(elem.all())]
+
 
 def get_line_positions(icl, swext=4, win=11, thresh=100.):
     """
@@ -139,7 +143,6 @@ def somefunctionthatcallsto(str):
     return 0
 
 
-
 def make_plots():
     # Make plots of the data... with subcalls to fitting functions
     return
@@ -147,10 +150,11 @@ def make_plots():
 
 
 
-
+#==============================================================================
 def main(args):
     flexure_analysis(args)
     return
+
 
 if __name__ == '__main__':
     import sys
