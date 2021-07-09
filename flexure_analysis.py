@@ -33,14 +33,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Get local routines
-from .from_dfocus import *
+from from_dfocus import *
 
 
-def flexure_analysis(args):
+def flexure_analysis(data_dir):
     # Driving routiune for the analysis
 
-    for grating in ['DV1','DV2','DV5']:
-        gcl = load_images(grating)
+    for grating in ['DV1']: #['DV1','DV2','DV5']:
+        gcl = load_images(data_dir, grating)
         summary = gcl.summary['obserno','telalt','telaz','rotangle']
         table = get_line_positions(gcl)
         table.pprint()
@@ -52,15 +52,20 @@ def flexure_analysis(args):
     return
 
 
-def load_images(grating):
-    # Load in the Images of interest
+def load_images(data_dir, grating):
+    """Load in the images associated with DATA_DIR and grating
+    
+    Inputs: `data_dir`: The directory containing the data to analyze
+            `grating`: The grating ID to use
+    """
+    # Dictionary
+    gratid = {'DV1':'150/5000', 'DV2':'300/4000', 'DV5':'500/5500'}
 
-    icl = ccd.ImageFileCollection('./data/all_data')
-    DV1 = '150/5000'
-    DV2 = '300/4000'
-    DV5 = '500/5500'
-    #gid = '150/5000' if grating == 'DV1' else '500/5500' # do I need to do anything for the other gratings?
-    return icl.filter(grating=DV1)
+    # Load the images of interest in to an ImageFileCollection()
+    icl = ccd.ImageFileCollection(data_dir)
+
+    # Return an ImageFileCollection filtered by the grating desired
+    return icl.filter(grating=gratid[grating])
 
 
 def find_indices(arr,condition):
@@ -152,7 +157,24 @@ def make_plots():
 
 #==============================================================================
 def main(args):
-    flexure_analysis(args)
+
+    from os import path
+
+    # Call should be of form:
+    # % python flexure_analysis.py DATA_DIR
+
+    if len(args) == 1:
+        print(f"Error: scrpit {args[0]} requires the DATA_DIR to analyze.")
+        return
+    if not path.isdir(args[1]):
+        print(f"Error: DATA_DIR must be a directory containing the data to analyze.")
+        return
+    if len(args) > 2:
+        print(f"Warning: I'm ignoring the following arguments: {args[2:]}")
+
+    # Run the analysis
+    flexure_analysis(args[1])
+
     return
 
 
