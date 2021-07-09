@@ -164,13 +164,13 @@ def main(args):
     # % python flexure_analysis.py DATA_DIR
 
     if len(args) == 1:
-        print(f"Error: scrpit {args[0]} requires the DATA_DIR to analyze.")
+        print(f"ERROR: scrpit {args[0]} requires the DATA_DIR to analyze.")
         return
     if not path.isdir(args[1]):
-        print(f"Error: DATA_DIR must be a directory containing the data to analyze.")
+        print(f"ERROR: DATA_DIR must be a directory containing the data to analyze.")
         return
     if len(args) > 2:
-        print(f"Warning: I'm ignoring the following arguments: {args[2:]}")
+        print(f"WARNING: I'm ignoring the following arguments: {args[2:]}")
 
     # Run the analysis
     flexure_analysis(args[1])
