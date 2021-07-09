@@ -41,10 +41,14 @@ def flexure_analysis(data_dir):
         `data_dir` : Directory where the data are
     """
 
-    for grating in ['DV1']: #['DV1','DV2','DV5']:
+    for grating in ['DV1','DV2','DV5']:
 
         # Create an ImageFileCollection with files matching this grating
         gcl = load_images(data_dir, grating)
+
+        # If no files for this grating, move along
+        if len(gcl.files) == 0:
+            continue
 
         # Summary Table
         summary = gcl.summary['obserno','telalt','telaz','rotangle']
@@ -54,7 +58,7 @@ def flexure_analysis(data_dir):
         table.pprint()
 
         # Write out the table to disk
-        with open('table_containing_line_positions_DV1.csv','w', newline='') as f:
+        with open(f"table_containing_line_positions_{grating}.csv",'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(table)
 
