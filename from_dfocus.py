@@ -21,17 +21,17 @@ from scipy import optimize
 from scipy import signal
 
 
-def dextract(spectrum,traces,nspix,swext=4,npixavg=None):
+def extract_spectrum(spectrum,traces,nspix):
     """Object spectral extraction routine
    
-    Options:
-    ==x= swext = 1: extract point source spectra by averaging over window
-    ==x= swext = 2: extract full spatial orders with spatial interpolation
-    ==x= swext = 3: extract full orders without interpolation 
-    swext = 4: extract spectra by averaging over window
+    Input:
+      spectrum: 2D spectral image
+      traces: Trace line(s) along which to extract the spectrum
+      nspix: Window width across which to extract the spectrum
+
 
     Output:
-    spectra: 2 or 3-d array of spectra of individual orders
+      spectra: 2-d array of spectra of individual orders
     """
     
     # Set # orders, size of each order based on traces dimensionality; 0 -> return
@@ -39,32 +39,29 @@ def dextract(spectrum,traces,nspix,swext=4,npixavg=None):
         return 0                
     norders, nx = (1, traces.size) if traces.ndim == 1 else traces.shape
 
-    # Case out the option swext
-    if swext == 4:
-        if npixavg is None:
-            npixavg = nspix
-        spectra = np.empty((norders, nx), dtype=float)
+    # Start out with an empty array
+    spectra = np.empty((norders, nx), dtype=float)
 
-        # Get the averaged spectra
-        for io in range(norders):
-            spectra[io,:] = specavg(spectrum, traces[io,:], npixavg)
+    # Get the averaged spectra
+    for io in range(norders):
+        spectra[io,:] = specavg(spectrum, traces[io,:], nspix)
 
-        return spectra
-    
-    print("Silly user, you can't do that.")
-    return 0
+    return spectra
 
 
 def gaussfit_func(x, a0, a1, a2, a3):
- 
+    """Simple Gaussian function for fitting line profiles    
+    """
+
     # Silence RuntimeWarning for overflow, this function only
     warnings.simplefilter('ignore', RuntimeWarning)
+
     z = (x - a1) / a2
     y = a0 * np.exp(-z**2 / a2) + a3
     return y
 
 
-def dflines(image, thresh=20.):
+def find_lines(image, thresh=20.):
     """Automatically find and centroid lines in a 1-row image
  
     :image:
@@ -80,8 +77,6 @@ def dflines(image, thresh=20.):
     _, ny = image.shape
     avgj = np.ndarray.flatten(image)
 
-    print(f"Shapes of image: {image.shape}, and avgj: {avgj.shape}")
-
     # Create empty lists to fill
     peaks = []
     fwhm = []
@@ -93,7 +88,6 @@ def dflines(image, thresh=20.):
     # Step through the cut and identify peaks:
     fmax = 11     # Minimum separations
     fwin = 15
-    fhalfmax = int(np.floor(fmax/2))
     fhalfwin = int(np.floor(fwin/2))
     findmax = 50  # Maximum # of lines to find
     j0 = 0

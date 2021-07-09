@@ -35,13 +35,25 @@ from from_dfocus import *
 
 
 def flexure_analysis(data_dir):
-    # Driving routiune for the analysis
+    """Driving routine for the analysis
+    
+    Input:
+        `data_dir` : Directory where the data are
+    """
 
     for grating in ['DV1']: #['DV1','DV2','DV5']:
+
+        # Create an ImageFileCollection with files matching this grating
         gcl = load_images(data_dir, grating)
+
+        # Summary Table
         summary = gcl.summary['obserno','telalt','telaz','rotangle']
+
+        # Data table of line positions for each image in the ImageFileCollection
         table = get_line_positions(gcl)
         table.pprint()
+
+        # Write out the table to disk
         with open('table_containing_line_positions_DV1.csv','w', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(table)
@@ -70,13 +82,12 @@ def find_indices(arr,condition):
     return [i for i, elem in enumerate(arr) if condition(elem.all())]
 
 
-def get_line_positions(icl, swext=4, win=11, thresh=100.):
+def get_line_positions(icl, win=11, thresh=10000.):
     """
     Inputs: 'icl' = ImageFileCollection of images to work with
 
             These inputs are for the `dfocus`-derived code, and may be left
             at their default values.
-            'swext' = Vestigial extraction parameter
             'win' = Something about the window to extract
             'thresh' = ADU threshold, above which look for lines
     """
@@ -86,7 +97,7 @@ def get_line_positions(icl, swext=4, win=11, thresh=100.):
     # This will only give the x values of the fits file.
     # For each of the images,
     for ccd, fname in icl.ccds(return_fname=True):
-
+        print("")
         #====================
         # Code cut-and-paste from dfocus() -- Get line centers above `thresh`
         # Parameters for DeVeny (2015 Deep-Depletion Device):
@@ -95,9 +106,9 @@ def get_line_positions(icl, swext=4, win=11, thresh=100.):
         spec2d = ccd.data[12:512,prepix:prepix+n_spec_pix]
         ny, nx = spec2d.shape
         trace = np.full(nx, ny/2, dtype=float).reshape((1,nx)) # Right down the middle
-        spec1d = dextract(spec2d, trace, win, swext=swext)
+        spec1d = extract_spectrum(spec2d, trace, win)
         # Find the lines:
-        centers, _ = dflines(spec1d, thresh=thresh)
+        centers, _ = find_lines(spec1d, thresh=thresh)
         nc = len(centers)
         print(F"In get_line_positions(), number of lines: {nc}")
         print(f"Line Centers: {[f'{cent:.1f}' for cent in centers]}")
@@ -135,7 +146,7 @@ def get_line_positions(icl, swext=4, win=11, thresh=100.):
                 # define limits of line
                 # find middle of the line
                 # count that x value as a valid line and store
-        print(lines_by_row[-1])
+        #print(lines_by_row[-1])
         flex_line_positions.append({'file':fname,
                                     'lines': lines_by_row})
     t = Table(flex_line_positions)
@@ -155,11 +166,12 @@ def make_plots():
 
 #==============================================================================
 def main(args):
+    """Main driving routine
 
+    Call should be of form:
+    % python flexure_analysis.py DATA_DIR
+    """
     from os import path
-
-    # Call should be of form:
-    # % python flexure_analysis.py DATA_DIR
 
     if len(args) == 1:
         print(f"ERROR: scrpit {args[0]} requires the DATA_DIR to analyze.")
