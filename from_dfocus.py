@@ -69,8 +69,6 @@ def dflines(image, thresh=20.):
  
     :image:
     :thresh: 20 DN above background
-    :mark:
-    :title:
 
     Returns:
     :centers: List of line centers (pixel #)
@@ -79,7 +77,7 @@ def dflines(image, thresh=20.):
     # Silence OptimizeWarning, this function only
     warnings.simplefilter('ignore', optimize.OptimizeWarning)
 
-    nx, ny = image.shape
+    _, ny = image.shape
     avgj = np.ndarray.flatten(image)
 
     print(f"Shapes of image: {image.shape}, and avgj: {avgj.shape}")
@@ -128,7 +126,7 @@ def dflines(image, thresh=20.):
             # Run the fit, with error checking
             try:
                 p0 = [1000, np.mean(xx), 3, bkgd]
-                aa, cv = optimize.curve_fit(gaussfit_func, xx, temp, p0=p0)
+                aa, _ = optimize.curve_fit(gaussfit_func, xx, temp, p0=p0)
             except RuntimeError:
                 continue  # Just skip this one
 
@@ -163,7 +161,7 @@ def specavg(spectrum, trace, wsize):
     elif spectrum.ndim == 1:
         nx = spectrum.size
     else:
-        ny, nx = spectrum.shape
+        _, nx = spectrum.shape
     speca = np.empty(nx, dtype=float)
 
     whalfsize = int(np.floor(wsize/2))
