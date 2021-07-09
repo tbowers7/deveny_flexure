@@ -20,9 +20,7 @@ Should be run in an environment containing:
     * Matplotlib
 
 Run from the command line:
-% python flexure_analysis.py
-
---> Should probably have a mechanism for specifying the data directory...
+% python flexure_analysis.py DATA_DIR
 
 """
 
