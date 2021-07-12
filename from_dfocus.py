@@ -61,11 +61,14 @@ def gaussfit_func(x, a0, a1, a2, a3):
     return y
 
 
-def find_lines(image, thresh=20.):
+def find_lines(image, thresh=20., findmax=50, minsep=11, fit_window=15):
     """Automatically find and centroid lines in a 1-row image
  
     :image:
-    :thresh: 20 DN above background
+    :thresh: Threshold above which to indentify lines [Default: 20 DN above bkgd]
+    :findmax: Maximum number of lines to find [Default: 50]
+    :minsep: Minimum line separation for identification [Default: 11 pixels]
+    :fit_window: Size of the window to fit Gaussian [Default: 15 pixels]
 
     Returns:
     :centers: List of line centers (pixel #)
@@ -74,47 +77,55 @@ def find_lines(image, thresh=20.):
     # Silence OptimizeWarning, this function only
     warnings.simplefilter('ignore', optimize.OptimizeWarning)
 
-    _, ny = image.shape
-    avgj = np.ndarray.flatten(image)
-
-    # Create empty lists to fill
-    peaks = []
-    fwhm = []
+    # Define the half-window
+    fhalfwin = int(np.floor(fit_window/2))
  
-    # Create background from median value of the image:
-    bkgd = np.median(image)
+     # Get size and flatten to 1D
+    _, nx = image.shape
+    spec = np.ndarray.flatten(image)
+
+    # Find background from median value of the image:
+    bkgd = np.median(spec)
     print(f'  Background level: {bkgd:.1f}')
 
-    # Step through the cut and identify peaks:
-    fmax = 11     # Minimum separations
-    fwin = 15
-    fhalfwin = int(np.floor(fwin/2))
-    findmax = 50  # Maximum # of lines to find
+    # Create empty lists to fill
+    cent, fwhm = ([], [])
     j0 = 0
 
-    # Loop through lines
-    for j in range(ny):
+    # Step through the cut and identify peaks:
+    for j in range(nx):
         
-        if j > (ny - fmax):
+        # If we get too close to the end, skip
+        if j > (nx - minsep):
             continue
 
-        if avgj[j] > (bkgd + thresh):
+        # If the spectrum at this pixel is above the THRESH...
+        if spec[j] > (bkgd + thresh):
+
+            # Mark this pixel as j1
             j1 = j
-            if np.abs(j1 - j0) < fmax:      
+
+            # If this is too close to the last one, skip
+            if np.abs(j1 - j0) < minsep:      
                 continue
 
+            # Loop through 0-FINDMAX...  (find central pixel?)
             for jf in range(findmax):
-                itmp0 = avgj[jf + j]
-                itmp1 = avgj[jf + j + 1]
+                itmp0 = spec[jf + j]
+                itmp1 = spec[jf + j + 1]
                 if itmp1 < itmp0:
                     icntr = jf + j
                     break
 
-            if (icntr < fmax/2) or (icntr > (ny - fmax/2 - 1)):
+            # If central pixel is too close to the edge, skip
+            if (icntr < minsep/2) or (icntr > (nx - minsep/2 - 1)):
                 continue
 
-            xx = np.arange(fwin, dtype=float) + float(icntr - fhalfwin)
-            temp = avgj[(icntr) - fhalfwin : (icntr) + fhalfwin + 1]
+            # Set up the gaussian fitting for this line
+            xmin, xmax = (icntr - fhalfwin, icntr + fhalfwin + 1)
+            xx = np.arange(xmin, xmax, dtype=float)
+            temp = spec[xmin : xmax]
+            # Filter the SPEC to smooth it a bit for fitting
             temp = signal.medfilt(temp, kernel_size=3)
             
             # Run the fit, with error checking
@@ -124,18 +135,18 @@ def find_lines(image, thresh=20.):
             except RuntimeError:
                 continue  # Just skip this one
 
-            _ = gaussfit_func(xx, *aa)
-            center = aa[1]
-            fw = aa[2] * 2.355   # sigma -> FWHM
-            if fw > 1.0:
-                peaks.append(center)
+            # If the width makes sense, save
+            if (fw := aa[2] * 2.355) > 1.0:      # sigma -> FWHM
+                cent.append(aa[1])
                 fwhm.append(fw)
+
+            # Set j0 to this pixel before looping on
             j0 = jf + j
 
-    centers = np.asarray(peaks)
-    
-    cc = np.where(np.logical_and(centers >=0, centers <=2100))
-    centers = centers[cc]
+    # Make list into an array, check again that the centers make sense
+    centers = np.asarray(cent)    
+    c_idx = np.where(np.logical_and(centers >0, centers <=nx))
+    centers = centers[c_idx]
 
     print(f" Number of lines: {len(centers)}")
  
@@ -149,15 +160,12 @@ def specavg(spectrum, trace, wsize):
     :param wsize: the size of the extraction (usually odd)
     :return:
     """
-    # Case out the dimensionality of traces... 0 -> return
+    # If ndim = 0, return, otherwise get nx
     if spectrum.ndim == 0:
         return 0
-    elif spectrum.ndim == 1:
-        nx = spectrum.size
-    else:
-        _, nx = spectrum.shape
-    speca = np.empty(nx, dtype=float)
+    nx = (spectrum.shape)[-1]
 
+    speca = np.empty(nx, dtype=float)
     whalfsize = int(np.floor(wsize/2))
 
     # Because of python indexing, we need to "+1" the upper limit in order
