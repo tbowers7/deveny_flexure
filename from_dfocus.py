@@ -21,14 +21,13 @@ from scipy import optimize
 from scipy import signal
 
 
-def extract_spectrum(spectrum,traces,nspix):
+def extract_spectrum(spectrum, traces, nspix):
     """Object spectral extraction routine
    
     Input:
       spectrum: 2D spectral image
       traces: Trace line(s) along which to extract the spectrum
       nspix: Window width across which to extract the spectrum
-
 
     Output:
       spectra: 2-d array of spectra of individual orders
@@ -50,15 +49,23 @@ def extract_spectrum(spectrum,traces,nspix):
 
 
 def gaussfit_func(x, a0, a1, a2, a3):
-    """Simple Gaussian function for fitting line profiles    
+    """Simple Gaussian function for fitting line profiles
+    Input:
+      x: array of x values
+      a0: Amplitude
+      a1: Mean x value (mu)
+      a2: Gaussian sigma
+      a3: Background offset
+
+    Output:
+      y: array of y values corresponding to input a's
     """
 
     # Silence RuntimeWarning for overflow, this function only
     warnings.simplefilter('ignore', RuntimeWarning)
 
     z = (x - a1) / a2
-    y = a0 * np.exp(-z**2 / a2) + a3
-    return y
+    return a0 * np.exp(-z**2 / 2.) + a3
 
 
 def find_lines(image, thresh=20., findmax=50, minsep=11, fit_window=15):
@@ -145,7 +152,7 @@ def find_lines(image, thresh=20., findmax=50, minsep=11, fit_window=15):
 
     # Make list into an array, check again that the centers make sense
     centers = np.asarray(cent)    
-    c_idx = np.where(np.logical_and(centers >0, centers <=nx))
+    c_idx = np.where(np.logical_and(centers > 0, centers <= nx))
     centers = centers[c_idx]
 
     print(f" Number of lines: {len(centers)}")
