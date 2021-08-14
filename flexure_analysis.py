@@ -35,11 +35,15 @@ from from_dfocus import *
 
 
 def flexure_analysis(data_dir):
-    """Driving routine for the analysis
-    
-    Input:
-        `data_dir` : Directory where the data are
-    """
+    """flexure_analysis Driving routine for the analysis
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    data_dir : `str`
+        Directory where the data live
+    """    
 
     for grating in ['DV1','DV2','DV5']:
 
@@ -50,28 +54,39 @@ def flexure_analysis(data_dir):
         if len(gcl.files) == 0:
             continue
 
-        # Summary Table
-        summary = gcl.summary['obserno','telalt','telaz','rotangle']
-
-        # Data table of line positions for each image in the ImageFileCollection
+        # AstroPy Table of line positions for each image in the IFC
         table = get_line_positions(gcl)
+        # Go through the identified lines and produce a set found in all images
+        table = validate_lines(table)
         table.pprint()
 
         # Write out the table to disk
-        with open(f"table_containing_line_positions_{grating}.csv",'w', newline='') as f:
+        with open(f"line_positions_{grating}.csv",'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(table)
 
-    make_plots()
+        make_plots(table, grating)
+
     return
 
 
 def load_images(data_dir, grating):
-    """Load in the images associated with DATA_DIR and grating
+    """load_images Load in the images associated with DATA_DIR and grating
     
-    Inputs: `data_dir`: The directory containing the data to analyze
-            `grating`: The grating ID to use
-    """
+    [extended_summary]
+
+    Parameters
+    ----------
+    data_dir : `str`
+        The directory containing the data to analyze
+    grating : `str`
+        The grating ID to use
+
+    Returns
+    -------
+    `ccdproc.image_collection.ImageFileCollection`
+        IFC of the files meeting the input criteria
+    """    
     # Dictionary
     gratid = {'DV1':'150/5000', 'DV2':'300/4000', 'DV5':'500/5500'}
 
@@ -82,25 +97,37 @@ def load_images(data_dir, grating):
     return icl.filter(grating=gratid[grating])
 
 
-def find_indices(arr,condition):
-    return [i for i, elem in enumerate(arr) if condition(elem.all())]
-
-
 def get_line_positions(icl, win=11, thresh=10000.):
-    """
-    Inputs: 'icl' = ImageFileCollection of images to work with
+    """get_line_positions Compute the line positions for the images in the icl
 
-            These inputs are for the `dfocus`-derived code, and may be left
-            at their default values.
-            'win' = Something about the window to extract
-            'thresh' = ADU threshold, above which look for lines
-    """
+    [extended_summary]
+
+    Parameters
+    ----------
+    icl : `ccdproc.image_collection.ImageFileCollection`
+        ImageFileCollection of images to work with
+    win : `int`, optional
+        Window (in pixels) across which to extract the spectrum, [Default: 11]
+    thresh : `float`, optional
+        Line intensity (ADU) threshold for detection, [Default: 10000.]
+
+    Returns
+    -------
+    `astropy.table.table.Table`
+        Table of line positions with associated metadata
+    """    
     # Put everything into a list of dicionaties
     flex_line_positions = []
 
     # This will only give the x values of the fits file.
     # For each of the images,
     for ccd, fname in icl.ccds(return_fname=True):
+        # Need a lower threshold for DV5 than for DV1
+        if ccd.header['grating'] == '500/5500':
+            thresh = 1000.
+        # Check for bias frames
+        if ccd.header['exptime'] == 0:
+            continue
         print("")
         #====================
         # Code cut-and-paste from dfocus() -- Get line centers above `thresh`
@@ -114,55 +141,76 @@ def get_line_positions(icl, win=11, thresh=10000.):
         # Find the lines:
         centers, _ = find_lines(spec1d, thresh=thresh)
         nc = len(centers)
-        print(F"In get_line_positions(), number of lines: {nc}")
-        print(f"Line Centers: {[f'{cent:.1f}' for cent in centers]}")
+        print(f"Found {nc} Line Centers: {[f'{cent:.1f}' for cent in centers]}")
         #====================
 
+        h = ccd.header
+ 
+        flex_line_positions.append({'filename':fname,
+                                    'obserno': h['obserno'],
+                                    'alt':h['telalt'],
+                                    'az':h['telaz'],
+                                    'cass':h['rotangle'],
+                                    'utcstart':h['utcstart'],
+                                    'lamps':h['lampcal'],
+                                    'grating':h['grating'],
+                                    'grangle':h['grangle'],
+                                    'slitwidth':h['slitasec'],
+                                    'nlines':nc,
+                                    'xpos':centers})
 
-        #### Ben: At this point, you will have the line centers for this image,
-        #         and you can then proceed to place those into a table for
-        #         future analysis. 
-
-
-        # detrmine flat level of image
-        #take a defined set of known flat collums
-        max_row0=max(np.transpose(ccd.data)[0])
-        max_row1=max(np.transpose(ccd.data)[1])
-        max_row2=max(np.transpose(ccd.data)[2])
-        flat_value =  max(max_row0,max_row1,max_row2)
-
-        # measure the line position
-        # scan each row,
-        lines_by_row = []
-
-        for r in range(50,100):
-            # if the majority of the collumns give a value above flat, store index in array
-            lines_by_row.append({'row':r,
-                                 'lines': find_indices(ccd.data[r] > flat_value, lambda e: e ),
-                                 'alt':somefunctionthatcallsto('telalt'),
-                                 'Az':somefunctionthatcallsto('telaz'),
-                                 'rot':somefunctionthatcallsto('rotangle')})
-            # save lines to cached lines array
-            # for each scan: if above flat threshold,
-                # mark center value of line,
-                # find start of increase above flat level
-                # find end of increase above flat level
-                # define limits of line
-                # find middle of the line
-                # count that x value as a valid line and store
-        #print(lines_by_row[-1])
-        flex_line_positions.append({'file':fname,
-                                    'lines': lines_by_row})
     t = Table(flex_line_positions)
     return t
 
 
-def somefunctionthatcallsto(str):
-    return 0
+def validate_lines(t):
+    """validate_lines Validate the found lines to produce a uniform set
+
+    The number of lines identified will vary form image to image.  This
+    function validates the lines to return the set of lines found in ALL
+    images for this grating.
+
+    Parameters
+    ----------
+    t : `astropy.table.table.Table`
+        AstroPy Table as produced by get_line_positions()
+
+    Returns
+    -------
+    `astropy.table.table.Table`
+        AstroPy Table identical to input except the lines are validated
+    """    
+    return t
 
 
-def make_plots():
-    # Make plots of the data... with subcalls to fitting functions
+def make_plots(t, grating):
+    """make_plots Make plots of the data... with subcalls to fitting functions
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    t : `astropy.table.table.Table`
+        AstroPy Table for this grating, containing all the data!
+    grating : `str`
+        Grating name, for labeling plots and creating filenames
+    """    
+
+    # Set up the plotting environment
+    _, ax = plt.subplots()
+    tsz = 8
+
+    
+
+    ax.set_xlabel('Something', fontsize=tsz)
+    ax.set_ylabel('Something', fontsize=tsz)
+
+    # Final adjustments and save figure
+    ax.tick_params('both', labelsize=tsz, direction='in', top=True, right=True)
+    plt.tight_layout()
+    plt.savefig(f"flexure_analysis_{grating}.eps")
+    plt.savefig(f"flexure_analysis_{grating}.png")
+
     return
 
 

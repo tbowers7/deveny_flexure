@@ -22,17 +22,24 @@ from scipy import signal
 
 
 def extract_spectrum(spectrum, traces, nspix):
-    """Object spectral extraction routine
-   
-    Input:
-      spectrum: 2D spectral image
-      traces: Trace line(s) along which to extract the spectrum
-      nspix: Window width across which to extract the spectrum
+    """extract_spectrum Object spectral extraction routine
 
-    Output:
-      spectra: 2-d array of spectra of individual orders
-    """
-    
+    [extended_summary]
+
+    Parameters
+    ----------
+    spectrum : [type]
+        2D spectral image
+    traces : [type]
+        Trace line(s) along which to extract the spectrum
+    nspix : [type]
+        Window width across which to extract the spectrum
+
+    Returns
+    -------
+    [type]
+        2-d array of spectra of individual orders
+    """    
     # Set # orders, size of each order based on traces dimensionality; 0 -> return
     if traces.ndim == 0:
         return 0                
@@ -49,18 +56,28 @@ def extract_spectrum(spectrum, traces, nspix):
 
 
 def gaussfit_func(x, a0, a1, a2, a3):
-    """Simple Gaussian function for fitting line profiles
-    Input:
-      x: array of x values
-      a0: Amplitude
-      a1: Mean x value (mu)
-      a2: Gaussian sigma
-      a3: Background offset
+    """gaussfit_func Simple Gaussian function for fitting line profiles
 
-    Output:
-      y: array of y values corresponding to input a's
-    """
+    [extended_summary]
 
+    Parameters
+    ----------
+    x : [type]
+        Array of x values for the fit
+    a0 : `float`
+        Amplitude of the Gaussian
+    a1 : `float`
+        Mean of the Gaussian
+    a2 : `float`
+        Gaussian sigma
+    a3 : `float`
+        Background offset
+
+    Returns
+    -------
+    [type]
+        Array of y values corresponding to input a's and x
+    """    
     # Silence RuntimeWarning for overflow, this function only
     warnings.simplefilter('ignore', RuntimeWarning)
 
@@ -68,19 +85,33 @@ def gaussfit_func(x, a0, a1, a2, a3):
     return a0 * np.exp(-z**2 / 2.) + a3
 
 
-def find_lines(image, thresh=20., findmax=50, minsep=11, fit_window=15):
-    """Automatically find and centroid lines in a 1-row image
- 
-    :image:
-    :thresh: Threshold above which to indentify lines [Default: 20 DN above bkgd]
-    :findmax: Maximum number of lines to find [Default: 50]
-    :minsep: Minimum line separation for identification [Default: 11 pixels]
-    :fit_window: Size of the window to fit Gaussian [Default: 15 pixels]
+def find_lines(image, thresh=20., findmax=50, minsep=11, fit_window=15, 
+               verbose=False):
+    """find_lines Automatically find and centroid lines in a 1-row image
 
-    Returns:
-    :centers: List of line centers (pixel #)
-    :fwhm: The computed FWHM
-    """
+    [extended_summary]
+
+    Parameters
+    ----------
+    image : [type]
+        [description]
+    thresh : `float`, optional
+        Threshold above which to indentify lines [Default: 20 DN above bkgd]
+    findmax : `int`, optional
+        Maximum number of lines to find [Default: 50]
+    minsep : `int`, optional
+        Minimum line separation for identification [Default: 11 pixels]
+    fit_window : `int`, optional
+        Size of the window to fit Gaussian [Default: 15 pixels]
+    verbose : `bool`
+        Produce verbose output?  [Default: False]
+
+    Returns
+    -------
+    `tuple: float, float`
+        centers: List of line centers (pixel #)
+        fwhm: The computed FWHM
+    """    
     # Silence OptimizeWarning, this function only
     warnings.simplefilter('ignore', optimize.OptimizeWarning)
 
@@ -93,7 +124,8 @@ def find_lines(image, thresh=20., findmax=50, minsep=11, fit_window=15):
 
     # Find background from median value of the image:
     bkgd = np.median(spec)
-    print(f'  Background level: {bkgd:.1f}')
+    print(f'  Background level: {bkgd:.1f}' + \
+          f'   Detection threshold level: {bkgd+thresh:.1f}')
 
     # Create empty lists to fill
     cent, fwhm = ([], [])
@@ -155,18 +187,31 @@ def find_lines(image, thresh=20., findmax=50, minsep=11, fit_window=15):
     c_idx = np.where(np.logical_and(centers > 0, centers <= nx))
     centers = centers[c_idx]
 
-    print(f" Number of lines: {len(centers)}")
+    if verbose:
+        print(f" Number of lines: {len(centers)}")
  
     return (centers, fwhm)
 
 
 def specavg(spectrum, trace, wsize):
-    """Extract an average spectrum along trace of size wsize
-    :param spectrum: input spectrum
-    :param trace: the trace along which to extract
-    :param wsize: the size of the extraction (usually odd)
-    :return:
-    """
+    """specavg Extract an average spectrum along trace of size wsize
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    spectrum : [type]
+        Input Spectrum
+    trace : [type]
+        The trace along which to extract
+    wsize : `int`
+        Window size of the extraction (usually odd)
+
+    Returns
+    -------
+    [type]
+        One-dimensional extracted spectrum
+    """    
     # If ndim = 0, return, otherwise get nx
     if spectrum.ndim == 0:
         return 0
