@@ -24,7 +24,7 @@ Run from the command line:
 
 """
 
-import csv
+import os
 import ccdproc as ccd
 from astropy.table import Table
 import numpy as np
@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 from from_dfocus import *
 
 
-def flexure_analysis(data_dir):
+def flexure_analysis(data_dir, rescan=False):
     """flexure_analysis Driving routine for the analysis
 
     [extended_summary]
@@ -47,24 +47,32 @@ def flexure_analysis(data_dir):
 
     for grating in ['DV1','DV2','DV5']:
 
-        # Create an ImageFileCollection with files matching this grating
-        gcl = load_images(data_dir, grating)
+        save_fn = f"flex_data_{grating}.fits"
 
-        # If no files for this grating, move along
-        if len(gcl.files) == 0:
-            continue
+        # Check to see if we saved the AstroPy table to FITS...
+        if not rescan and os.path.isfile(save_fn):
+            table = Table.read(save_fn)
 
-        # AstroPy Table of line positions for each image in the IFC
-        table = get_line_positions(gcl)
-        # Go through the identified lines and produce a set found in all images
-        table = validate_lines(table)
-        table.pprint()
+        else:
+            # Create an ImageFileCollection with files matching this grating;
+            #  if empty, move along
+            gcl = load_images(data_dir, grating)
+            if len(gcl.files) == 0:
+                continue
 
-        # Write out the table to disk
-        with open(f"line_positions_{grating}.csv",'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerows(table)
+            # AstroPy Table of line positions for each image in the IFC
+            table = get_line_positions(gcl)
 
+            # Go through the identified lines and produce a set found in all images
+            table = validate_lines(table)
+
+            # Write the validated table to disk for future use
+            table.write(save_fn, overwrite=True)
+
+        # Print out information on the table to the screen
+        print(table.info)
+
+        # Analyze!!!
         make_plots(table, grating)
 
     return
@@ -97,7 +105,7 @@ def load_images(data_dir, grating):
     return icl.filter(grating=gratid[grating])
 
 
-def get_line_positions(icl, win=11, thresh=10000.):
+def get_line_positions(icl, win=11, thresh=5000.):
     """get_line_positions Compute the line positions for the images in the icl
 
     [extended_summary]
@@ -109,7 +117,7 @@ def get_line_positions(icl, win=11, thresh=10000.):
     win : `int`, optional
         Window (in pixels) across which to extract the spectrum, [Default: 11]
     thresh : `float`, optional
-        Line intensity (ADU) threshold for detection, [Default: 10000.]
+        Line intensity (ADU) threshold for detection, [Default: 5000.]
 
     Returns
     -------
@@ -141,11 +149,15 @@ def get_line_positions(icl, win=11, thresh=10000.):
         # Find the lines:
         centers, _ = find_lines(spec1d, thresh=thresh)
         nc = len(centers)
-        print(f"Found {nc} Line Centers: {[f'{cent:.1f}' for cent in centers]}")
+        cen_list = [f'{cent:.5f}' for cent in centers]
+        print(f"Found {nc} Line Centers: {cen_list}")
         #====================
 
+        # For ease
         h = ccd.header
- 
+        # For saving the table to disk
+        cen_str = ','.join(cen_list)
+
         flex_line_positions.append({'filename':fname,
                                     'obserno': h['obserno'],
                                     'alt':h['telalt'],
@@ -157,7 +169,7 @@ def get_line_positions(icl, win=11, thresh=10000.):
                                     'grangle':h['grangle'],
                                     'slitwidth':h['slitasec'],
                                     'nlines':nc,
-                                    'xpos':centers})
+                                    'xpos':cen_str})
 
     t = Table(flex_line_positions)
     return t
@@ -180,6 +192,48 @@ def validate_lines(t):
     `astropy.table.table.Table`
         AstroPy Table identical to input except the lines are validated
     """    
+    print("Yay, Validation!!!!")
+    nl = t['nlines']
+    print(f"Mean # of lines found: {np.mean(nl)}  Min: {np.min(nl)}  Max: {np.max(nl)}")
+
+    # Create a variable to hold the FINAL LINES for this table
+    final_lines = None
+    for row in t:
+        # Line centers found for this image
+        cens = np.asarray([float(c) for c in row['xpos'].split(',')])
+
+        # If this is the first one, easy...
+        if final_lines is None:
+            final_lines = cens
+        else:
+            # Remove any canonical lines not in every image
+            for line in final_lines:
+                # If nothing is in the same ballpark (say, 12 pixels), 
+                #   toss this canonical line
+                if np.min(np.absolute(cens - line)) > 12.: 
+                    final_lines = final_lines[final_lines != line]
+
+    n_final = len(final_lines)
+    print(f"Validated {n_final} lines.")
+    # Go back through, and replace the `xpos` value in each row with those
+    #  lines corresponding to the good final lines
+    for i, row in enumerate(t):
+        # Line centers found for this image
+        cens = np.asarray([float(c) for c in row['xpos'].split(',')])
+
+        # Keep just the lines that match the canonical lines
+        keep_lines = []
+        for line in final_lines:
+            min_diff = np.min(np.absolute(diffs := cens - line))
+            idx = np.where(np.absolute(diffs) == min_diff)
+            # This is the line for this image that matches this canonical line
+            keep_lines.append(cens[idx])
+
+        # Turn the list back into the string thing for the table
+        keep_lines = np.asarray(keep_lines).flatten()
+        t['xpos'][i] = ','.join([f"{l:.5f}" for l in keep_lines])
+        t['nlines'][i] = n_final
+
     return t
 
 
