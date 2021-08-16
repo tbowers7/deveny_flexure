@@ -149,7 +149,7 @@ def get_line_positions(icl, win=11, thresh=5000.):
         # Find the lines:
         centers, _ = find_lines(spec1d, thresh=thresh)
         nc = len(centers)
-        cen_list = [f'{cent:.5f}' for cent in centers]
+        cen_list = [f'{cent}' for cent in centers]
         print(f"Found {nc} Line Centers: {cen_list}")
         #====================
 
@@ -217,6 +217,7 @@ def validate_lines(t):
     print(f"Validated {n_final} lines.")
     # Go back through, and replace the `xpos` value in each row with those
     #  lines corresponding to the good final lines
+    xpos = []
     for i, row in enumerate(t):
         # Line centers found for this image
         cens = np.asarray([float(c) for c in row['xpos'].split(',')])
@@ -229,11 +230,11 @@ def validate_lines(t):
             # This is the line for this image that matches this canonical line
             keep_lines.append(cens[idx])
 
-        # Turn the list back into the string thing for the table
-        keep_lines = np.asarray(keep_lines).flatten()
-        t['xpos'][i] = ','.join([f"{l:.5f}" for l in keep_lines])
-        t['nlines'][i] = n_final
+        # Put the array into a list to wholesale replace `xpos`
+        xpos.append(np.asarray(keep_lines).flatten())
 
+    t['nlines'] = [n_final] * len(t)
+    t['xpos'] = xpos
     return t
 
 
