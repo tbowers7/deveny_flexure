@@ -21,7 +21,7 @@ Should be run in an environment containing:
     * SciPy
 
 Run from the command line:
-% python flexure_analysis.py DATA_DIR
+% python flexure_analysis.py DATA_DIR [force]
 
 """
 
@@ -46,6 +46,8 @@ def flexure_analysis(data_dir, rescan=False):
     ----------
     data_dir : `str`
         Directory where the data live
+    rescan : `bool`
+        Forcably rescan and refit the files
     """    
 
     for grating in ['DV1','DV2','DV5']:
@@ -72,7 +74,7 @@ def flexure_analysis(data_dir, rescan=False):
             # Add table columns for Delta away from 0º, and Delta away from mean
             table = compute_line_deltas(table)
 
-            # Write the validated table to disk for future use
+            # Write the validated table to disk for future use (faster analysis)
             table.write(save_fn, overwrite=True)
 
         # Print out information on the table to the screen
@@ -398,7 +400,7 @@ def main(args):
     """Main driving routine
 
     Call should be of form:
-    % python flexure_analysis.py DATA_DIR
+    % python flexure_analysis.py DATA_DIR [force]
     """
     from os import path
 
@@ -408,11 +410,15 @@ def main(args):
     if not path.isdir(args[1]):
         print(f"ERROR: DATA_DIR must be a directory containing the data to analyze.")
         return
-    if len(args) > 2:
+    if len(args) > 2 and args[2] == 'force':
+        force = True
+    else:
+        force = False
+    if len(args) > 2 and args[2] != 'force':
         print(f"WARNING: I'm ignoring the following arguments: {args[2:]}")
 
     # Run the analysis
-    flexure_analysis(args[1])
+    flexure_analysis(args[1], rescan=force)
 
     return
 
