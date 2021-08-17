@@ -18,6 +18,7 @@ Should be run in an environment containing:
     * CCDPROC
     * NumPy
     * Matplotlib
+    * SciPy
 
 Run from the command line:
 % python flexure_analysis.py DATA_DIR
@@ -29,6 +30,8 @@ import ccdproc as ccd
 from astropy.table import Table
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import optimize
+import warnings
 
 # Get local routines
 from from_dfocus import *
@@ -65,6 +68,9 @@ def flexure_analysis(data_dir, rescan=False):
 
             # Go through the identified lines and produce a set found in all images
             table = validate_lines(table)
+
+            # Add table columns for Delta away from 0º, and Delta away from mean
+            table = compute_line_deltas(table)
 
             # Write the validated table to disk for future use
             table.write(save_fn, overwrite=True)
@@ -147,7 +153,7 @@ def get_line_positions(icl, win=11, thresh=5000.):
         trace = np.full(nx, ny/2, dtype=float).reshape((1,nx)) # Right down the middle
         spec1d = extract_spectrum(spec2d, trace, win)
         # Find the lines:
-        centers, _ = find_lines(spec1d, thresh=thresh)
+        centers, _ = find_lines(spec1d, thresh=thresh, minsep=17)
         nc = len(centers)
         cen_list = [f'{cent}' for cent in centers]
         print(f"Found {nc} Line Centers: {cen_list}")
@@ -160,14 +166,14 @@ def get_line_positions(icl, win=11, thresh=5000.):
 
         flex_line_positions.append({'filename':fname,
                                     'obserno': h['obserno'],
-                                    'alt':h['telalt'],
-                                    'az':h['telaz'],
-                                    'cass':h['rotangle'],
+                                    'telalt':h['telalt'],
+                                    'telaz':h['telaz'],
+                                    'rotangle':h['rotangle'],
                                     'utcstart':h['utcstart'],
-                                    'lamps':h['lampcal'],
+                                    'lampcal':h['lampcal'],
                                     'grating':h['grating'],
                                     'grangle':h['grangle'],
-                                    'slitwidth':h['slitasec'],
+                                    'slitasec':h['slitasec'],
                                     'nlines':nc,
                                     'xpos':cen_str})
 
@@ -194,7 +200,7 @@ def validate_lines(t):
     """    
     print("Yay, Validation!!!!")
     nl = t['nlines']
-    print(f"Mean # of lines found: {np.mean(nl)}  Min: {np.min(nl)}  Max: {np.max(nl)}")
+    # print(f"Mean # of lines found: {np.mean(nl)}  Min: {np.min(nl)}  Max: {np.max(nl)}")
 
     # Create a variable to hold the FINAL LINES for this table
     final_lines = None
@@ -238,6 +244,42 @@ def validate_lines(t):
     return t
 
 
+def compute_line_deltas(t):
+    """compute_line_deltas Compute line shifts and add to Table
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    t : `astropy.table.table.Table`
+        AstroPy Table as produced by validate_lines()
+        Note: Must be VALIDATED, so `xpos` are arrays, not strings
+
+    Returns
+    -------
+    `astropy.table.table.Table`
+        AstroPy Table identical to validated table, with extra columns
+    """
+
+    # Things for relating shifts w.r.t. ROTANGLE = 0
+    fiducial = t['xpos'][0]
+    delta_to_zero = []
+    for row in t:
+        delta_to_zero.append(row['xpos'] - fiducial)
+
+    # Things for relating shifts w.r.t. MEAN
+    xpos = t['xpos']
+    del_mean = np.copy(xpos)
+    _, nl = xpos.shape
+    for line in range(nl):
+        del_mean[:,line] = xpos[:,line] - np.mean(xpos[:,line])
+
+    t['del_zero'] = delta_to_zero
+    t['del_mean'] = del_mean
+
+    return t
+
+
 def make_plots(t, grating):
     """make_plots Make plots of the data... with subcalls to fitting functions
 
@@ -249,24 +291,104 @@ def make_plots(t, grating):
         AstroPy Table for this grating, containing all the data!
     grating : `str`
         Grating name, for labeling plots and creating filenames
-    """    
+    """
+    # Silence OptimizeWarning
+    warnings.simplefilter('ignore', optimize.OptimizeWarning)
 
     # Set up the plotting environment
     _, ax = plt.subplots()
     tsz = 8
 
-    
+    x,y,k = construct_plotting_pairs(t, 'rotangle', 'del_zero', 'telalt')
+    for i in range(len(x)):
+        xp, yp = (x[i], y[i])
+        ax.plot(xp,yp,f"C{i}.")
+        xp = np.swapaxes(np.tile(xp,[len(yp[0]),1]),0,1)
+        # print(f"Shapes: {xp.shape} {yp.shape}")
 
-    ax.set_xlabel('Something', fontsize=tsz)
-    ax.set_ylabel('Something', fontsize=tsz)
+        par, _ = optimize.curve_fit(sinusoid, xp.flatten(), yp.flatten(), p0=[1, 1, 0, 0])
+        xpl = np.arange(101) * (np.max(xp) - np.min(xp)) /100. + np.min(xp)
+        ypl = sinusoid(xpl, par[0], par[1], par[2], par[3])
+        label = f"El = {k[i]:.0f}"+r'$^\circ$'+f", A={par[0]:.1f} B={par[1]:.2f} C={par[2]:.1f} D={par[3]:.1f}"
+        ax.plot(xpl, ypl, f"C{i}-", label=label)
+
+    ax.set_xlabel('Cassegrain Rotator Angle [deg]', fontsize=tsz)
+    ax.set_ylabel(r'Line Center Deviation from CASS=$0^\circ$ Position [pixels]', fontsize=tsz)
 
     # Final adjustments and save figure
+    ax.legend(loc='upper left', fontsize=tsz)
     ax.tick_params('both', labelsize=tsz, direction='in', top=True, right=True)
     plt.tight_layout()
     plt.savefig(f"flexure_analysis_{grating}.eps")
     plt.savefig(f"flexure_analysis_{grating}.png")
 
     return
+
+
+def sinusoid(x, a, b, c, d):
+    """sinusoid Sine Function
+
+    [extended_summary]
+
+    Parameters
+    ----------
+    x : `float`
+        Abscissa (degrees)
+    a : `float`
+        Amplitude
+    b : `float`
+        Angular Frequency
+    c : `float`
+        Phase Offset (degrees)
+    d : `float`
+        Vertical offset
+
+    Returns
+    -------
+    `float``
+        Ordinate
+    """
+    # Fix angular frequency at 1
+    b = 1.0
+    return a * np.sin(b * x*np.pi/180. + c*np.pi/180.) + d
+
+
+def construct_plotting_pairs(t, abs, ord, sort):
+    """construct_plotting_pairs Construct plotting pairs from table
+
+    Extract the requested things from the table to construct plotting pairs
+    that can be directly input into ax.plot(), sorted by some other key
+
+    Parameters
+    ----------
+    t : `astropy.table.table.Table`
+        The table thingie we've been passing around
+    abs : `str`
+        FITS keyword for the data to appear on the abscissa
+    ord : `str`
+        FITS keyword for the data to appear on the ordinate
+    sort : `str`
+        FITS keyword for the data to sort by
+    """
+    # Clean the input keywords --> lower()
+    abs = abs.lower()
+    ord = ord.lower()
+    sort = sort.lower()
+
+    # Set blank lists to be filled
+    x = []
+    y = []
+
+    # Index the table based on the `sort` parameter
+    t_by_sort = t.group_by(sort)
+    for key in t_by_sort.groups.keys[sort]:
+        mask = (t_by_sort.groups.keys[sort] == key)
+        sub_t = t_by_sort.groups[mask]
+        # sub_t.pprint()
+        x.append(np.asarray(sub_t[abs]))
+        y.append(np.asarray(sub_t[ord]))
+
+    return x, y, t_by_sort.groups.keys[sort]
 
 
 
