@@ -21,7 +21,7 @@ Should be run in an environment containing:
     * SciPy
 
 Run from the command line:
-% python flexure_analysis.py DATA_DIR [force]
+% python flexure_analysis.py DATA_DIR [rescan]
 
 """
 
@@ -400,25 +400,32 @@ def main(args):
     """Main driving routine
 
     Call should be of form:
-    % python flexure_analysis.py DATA_DIR [force]
+    % python flexure_analysis.py DATA_DIR [rescan]
     """
     from os import path
 
+    # Exit if command-line arguments aren't valid
     if len(args) == 1:
         print(f"ERROR: scrpit {args[0]} requires the DATA_DIR to analyze.")
         return
     if not path.isdir(args[1]):
         print(f"ERROR: DATA_DIR must be a directory containing the data to analyze.")
         return
-    if len(args) > 2 and args[2] == 'force':
-        force = True
+
+    # Check for RESCAN argument
+    if len(args) > 2 and args[2] == 'rescan':
+        rescan = True
     else:
-        force = False
-    if len(args) > 2 and args[2] != 'force':
+        rescan = False
+
+    # Announce that we're putting our fingers in our ears and saying "LALALALA"
+    if len(args) > 2 and not rescan:
         print(f"WARNING: I'm ignoring the following arguments: {args[2:]}")
+    elif len(args) > 3 and rescan:
+        print(f"WARNING: I'm ignoring the following arguments: {args[3:]}")
 
     # Run the analysis
-    flexure_analysis(args[1], rescan=force)
+    flexure_analysis(args[1], rescan=rescan)
 
     return
 
