@@ -26,7 +26,7 @@ Run from the command line:
 """
 
 import os
-import ccdproc as ccd
+import ccdproc as ccdp
 from astropy.table import Table
 import numpy as np
 import matplotlib.pyplot as plt
@@ -50,7 +50,7 @@ def flexure_analysis(data_dir, rescan=False):
         Forcably rescan and refit the files
     """    
 
-    for grating in ['DV1','DV2','DV5']:
+    for grating in ['DV2']:#['DV1','DV2','DV5']:
 
         save_fn = f"flex_data_{grating}.fits"
 
@@ -107,7 +107,12 @@ def load_images(data_dir, grating):
     gratid = {'DV1':'150/5000', 'DV2':'300/4000', 'DV5':'500/5500'}
 
     # Load the images of interest in to an ImageFileCollection()
-    icl = ccd.ImageFileCollection(data_dir)
+    icl = ccdp.ImageFileCollection(data_dir)
+
+    # Clean up the telescope altitude
+    for ccd, fn in icl.ccds(return_fname=True):
+        ccd.header['telalt'] = np.round(ccd.header['telalt'])
+        ccd.write(os.path.join(data_dir,fn), overwrite=True)
 
     # Return an ImageFileCollection filtered by the grating desired
     return icl.filter(grating=gratid[grating])
@@ -304,7 +309,7 @@ def make_plots(t, grating):
     x,y,k = construct_plotting_pairs(t, 'rotangle', 'del_zero', 'telalt')
     for i in range(len(x)):
         xp, yp = (x[i], y[i])
-        ax.plot(xp,yp,f"C{i}.")
+        ax.plot(xp,yp,f"C{i if i < 10 else i-10}.")
         xp = np.swapaxes(np.tile(xp,[len(yp[0]),1]),0,1)
         # print(f"Shapes: {xp.shape} {yp.shape}")
 
@@ -312,7 +317,7 @@ def make_plots(t, grating):
         xpl = np.arange(101) * (np.max(xp) - np.min(xp)) /100. + np.min(xp)
         ypl = sinusoid(xpl, par[0], par[1], par[2], par[3])
         label = f"El = {k[i]:.0f}"+r'$^\circ$'+f", A={par[0]:.1f} B={par[1]:.2f} C={par[2]:.1f} D={par[3]:.1f}"
-        ax.plot(xpl, ypl, f"C{i}-", label=label)
+        ax.plot(xpl, ypl, f"C{i if i < 10 else i-10}-", label=label)
 
     ax.set_xlabel('Cassegrain Rotator Angle [deg]', fontsize=tsz)
     ax.set_ylabel(r'Line Center Deviation from CASS=$0^\circ$ Position [pixels]', fontsize=tsz)
@@ -386,7 +391,8 @@ def construct_plotting_pairs(t, abs, ord, sort):
     for key in t_by_sort.groups.keys[sort]:
         mask = (t_by_sort.groups.keys[sort] == key)
         sub_t = t_by_sort.groups[mask]
-        # sub_t.pprint()
+        print(f"Key: {key}")
+        sub_t.pprint()
         x.append(np.asarray(sub_t[abs]))
         y.append(np.asarray(sub_t[ord]))
 
